@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 //Shorten a URL
 async function shortenUrl(req, res){
     try{
-        const { originalUrl, expiresInDays } = req.body;
+        const { originalUrl, expiresInDays, customCode } = req.body;
 
         // Validate URL
         if (!originalUrl){
@@ -25,8 +25,44 @@ async function shortenUrl(req, res){
             expiresAt.setDate(expiresAt.getDate() + expiresInDays);
         }
 
-        // Generate unique short code
-        let shortCode = generateShortCode();
+        // Generate unique short code or use custom one entered by user
+        let shortCode;
+
+        if (customCode){
+            // Validate custom code (alphanumeric, 3-20 chars)
+            if (!/^[a-zA-Z0-9]{3,20}$/.test(customCode)) {
+                return res.status(400).json({ 
+                error: 'Custom code must be 3-20 alphanumeric characters' 
+                });
+            }
+
+            // Check if existing
+            const existing = await prisma.shortenedUrl.findUnique({
+                where: { shortCode: customCode }
+            });
+
+            if (existing) {
+                return res.status(409).json({
+                    error: 'Custom code already taken. Please choose another.'
+                });
+            }
+            
+            shortCode = customCode;
+        } else {
+            // Generate random short code
+            shortCode = generateShortCode();
+
+            let existing = await prisma.shortenedUrl.findUnique({
+                where: { shortCode }
+            });
+
+            while (existing){
+                shortCode = generateShortCode();
+                existing = await prisma.shortenedUrl.findUnique({
+                    where: { shortCode }
+                });
+            }
+        }
 
         // Check if code already exists
         let existing = await prisma.shortenedUrl.findUnique({
@@ -53,7 +89,7 @@ async function shortenUrl(req, res){
         res.status(201).json({
             shortCode: shortened.shortCode,
             originalUrl: shortened.originalUrl,
-            shortUrl: `http://localhost:3000/${shortened.shortCode}`
+            shortUrl: `http://localhost:3000/api/${shortened.shortCode}`
         });
 
     }catch (error){
@@ -143,4 +179,32 @@ async function getAllUrls(req, res) {
     }
 }
 
-module.exports = { shortenUrl, redirectUrl, getAnalytics, getAllUrls }
+async function deleteUrl(req, res){
+    try{
+        const { shortCode } = req.params;
+
+        const url = await prisma.shortenedUrl.findUnique({
+            where: { shortCode }
+        });
+
+        if (!url){
+            return res.status(404).json({ error: "Short URL not found."})
+        }
+
+        // Delete the URl
+        await prisma.shortenedUrl.delete({
+            where: { shortCode }
+        });
+        
+        res.json({ 
+            message: 'Short URL deleted successfully',
+            shortCode: shortCode
+        });
+
+    }catch (error){
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+module.exports = { shortenUrl, redirectUrl, getAnalytics, getAllUrls, deleteUrl }
