@@ -1,8 +1,6 @@
-const { PrismaClient } = require("@prisma/client");
-const generateShortCode = require("../utils/shortCodeGenerator");
-const isValidUrl = require("../utils/validateUrl")
-
-const prisma = new PrismaClient();
+const prisma = require('../db/prisma');
+const generateShortCode = require('../utils/shortCodeGenerator');
+const isValidUrl = require('../utils/validateUrl');
 
 //Shorten a URL
 async function shortenUrl(req, res){
@@ -62,19 +60,6 @@ async function shortenUrl(req, res){
                     where: { shortCode }
                 });
             }
-        }
-
-        // Check if code already exists
-        let existing = await prisma.shortenedUrl.findUnique({
-            where: { shortCode } // equivalent to shortCode: shortCode
-        });
-
-        // If existing, generate new code
-        while (existing){
-            shortCode = generateShortCode();
-            existing = await prisma.shortenedUrl.findUnique({
-                where: { shortCode }
-            });
         }
 
         // Save to database
