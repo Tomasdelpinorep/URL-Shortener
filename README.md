@@ -235,47 +235,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the Apache 2.0 License.
 
 ## Contact
 
-Your Name - [your.email@example.com](mailto:your.email@example.com)
-
-Project Link: [https://github.com/yourusername/url-shortener](https://github.com/yourusername/url-shortener)
-```
-
----
-
-**Step 2: Customize it**
-
-Update these sections with your info:
-- Replace "yourusername" with your GitHub username
-- Add your name and email in the Contact section
-- Add your actual repository URL
-
----
-
-**Step 3: Add a .gitignore file**
-
-Create `.gitignore` in your project root:
-```
-# Dependencies
-node_modules/
-
-# Environment variables
-.env
-
-# Test coverage
-coverage/
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-npm-debug.log*
+Tomas del Pino Coffey - tomasdelpino28@gmail.com
+Project Link: https://github.com/tomasdelpinorep/url-shortener
