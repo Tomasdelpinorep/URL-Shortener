@@ -1,9 +1,12 @@
 const express = require('express');
 const { shortenUrl, redirectUrl, getAnalytics, getAllUrls, deleteUrl } = require('../controllers/urlController');
+const { generalLimiter, createUrlLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
-router.post('/shorten', shortenUrl);
+router.use(generalLimiter);
+
+router.post('/shorten', createUrlLimiter, shortenUrl);
 
 router.get('/analytics/:shortCode', getAnalytics);
 
