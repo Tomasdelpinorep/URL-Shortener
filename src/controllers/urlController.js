@@ -2,6 +2,9 @@ const prisma = require('../db/prisma');
 const generateShortCode = require('../utils/shortCodeGenerator');
 const isValidUrl = require('../utils/validateUrl');
 const redis = require('../db/redis');
+const QRCode = require('qrcode');
+
+const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}/api`;
 
 //Shorten a URL
 async function shortenUrl(req, res){
@@ -75,7 +78,8 @@ async function shortenUrl(req, res){
         res.status(201).json({
             shortCode: shortened.shortCode,
             originalUrl: shortened.originalUrl,
-            shortUrl: `http://localhost:3000/api/${shortened.shortCode}`
+            shortUrl: `${baseUrl}/${shortened.shortCode}`,
+            qrCode: `${baseUrl}/qr/${shortened.shortCode}`
         });
 
     }catch (error){
@@ -246,4 +250,71 @@ async function getCacheStats(req, res){
     }
 }
 
-module.exports = { shortenUrl, redirectUrl, getAnalytics, getAllUrls, deleteUrl, getCacheStats }
+async function generateQRCode(req, res){
+    try{
+        const { shortCode } = req.params;
+
+        const url = await prisma.shortenedUrl.findUnique({
+            where: { shortCode }
+        });
+
+        if (!url){
+            return res.status(404).json({ error: 'Short URL not found.' });
+        }
+
+        // Check expiration
+        if (url.expiresAt && new Date() > url.expiresAt){
+            return res.status(410).json({ error: 'This short URL has expired.' });
+        }
+
+        const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+        const shortUrl = `${baseUrl}/${shortCode}`
+
+        const format = req.query.format || 'png';
+
+        if (format === 'png'){
+            // Generate QR code as PNG image
+            const qrCodeBuffer = await QRCode.toBuffer(shortUrl, {
+                width: 300,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            });
+        
+            res.setHeader('Content-Type', 'image/png');
+            res.send(qrCodeBuffer);
+
+        }else if (format == 'svg'){
+            const qrCodeSvg = await QRCode.toString(shortUrl, {
+                type: 'svg',
+                width: 300
+            });
+
+            res.setHeader('Content-Type', 'image/svg+xml');
+            res.send(qrCodeSvg);
+        }else if (format === 'json') {
+            // Return data URL (for embedding in HTML)
+            const qrCodeDataUrl = await QRCode.toDataURL(shortUrl, {
+                width: 300
+            });
+            
+            res.json({
+                shortCode,
+                shortUrl,
+                qrCode: qrCodeDataUrl
+            });
+        
+        } else {
+            return res.status(400).json({ 
+                error: 'Invalid format. Supported formats: png, svg, json' 
+            });
+        }
+    } catch (error){
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+module.exports = { shortenUrl, redirectUrl, getAnalytics, getAllUrls, deleteUrl, getCacheStats, generateQRCode }

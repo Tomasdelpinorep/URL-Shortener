@@ -18,7 +18,8 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "ioredis": "^5.9.1",
-    "prisma": "^6.19.1"
+    "prisma": "^6.19.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "jest": "^30.2.0",
