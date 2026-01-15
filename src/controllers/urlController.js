@@ -1,6 +1,7 @@
 const prisma = require('../db/prisma');
 const generateShortCode = require('../utils/shortCodeGenerator');
 const isValidUrl = require('../utils/validateUrl');
+const redis = require('../db/redis');
 
 //Shorten a URL
 async function shortenUrl(req, res){
@@ -88,7 +89,32 @@ async function redirectUrl(req, res){
     try{
         const { shortCode } = req.params;
 
-        // Find URL in database
+        // Try to find in cache first
+        const cachedUrl = await redis.get(`url:${shortCode}`);
+
+        if (cachedUrl){
+            console.log(`Cache HIT for ${shortCode}`);
+
+            // Parse the cached data
+            const urlData = JSON.parse(cachedUrl);
+
+            if (urlData.expiresAt && new Date() > urlData.expiresAt){
+                await redis.del(`url:${shortCode}`); // Delete expires URL from cache
+                return res.status(410).json({error: 'This short URL has expired.'})
+            }
+
+            // Increment clicks
+            prisma.shortenedUrl.update({
+                where: { shortCode },
+                data: { clicks: { increment: 1 } }
+            }).catch(err => console.error('Failed to update clicks: ', err));
+        
+            // Redirect inmediately from cache
+            return res.redirect(urlData.originalUrl);
+        }
+
+        // Cache miss - Find URL in database
+        console.log(`Cache MISS for ${shortCode}`);
         const url = await prisma.shortenedUrl.findUnique({
             where: { shortCode }
         });
@@ -101,6 +127,16 @@ async function redirectUrl(req, res){
         if (url.expiresAt && new Date() > url.expiresAt){
             return res.status(410).json({ error: 'This short URL has expired' });
         }
+
+        // Cache URL for 1 hour (3600 seconds)
+        await redis.setex(
+            `url:${shortCode}`,
+            3600,
+            JSON.stringify({
+                originalUrl: url.originalUrl,
+                expiresAt: url.expiresAt
+            })
+        );
 
         //Increment click count
         await prisma.shortenedUrl.update({
@@ -176,10 +212,13 @@ async function deleteUrl(req, res){
             return res.status(404).json({ error: "Short URL not found."})
         }
 
-        // Delete the URl
+        // Delete the URl from database
         await prisma.shortenedUrl.delete({
             where: { shortCode }
         });
+
+        // Delete from cache
+        await redis.del(`url:${shortCode}`);
         
         res.json({ 
             message: 'Short URL deleted successfully',
@@ -192,4 +231,19 @@ async function deleteUrl(req, res){
     }
 }
 
-module.exports = { shortenUrl, redirectUrl, getAnalytics, getAllUrls, deleteUrl }
+async function getCacheStats(req, res){
+    try{
+        const info = await redis.info('stats');
+        const keys = await redis.keys('url:*');
+
+        res.json({
+            cachedUrls: keys.length,
+            redisInfo: info
+        });
+    }catch (error){
+        console.error(error);
+        res.status(500).json({error: 'Internal server error.'});
+    }
+}
+
+module.exports = { shortenUrl, redirectUrl, getAnalytics, getAllUrls, deleteUrl, getCacheStats }
