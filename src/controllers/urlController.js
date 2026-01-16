@@ -66,12 +66,13 @@ async function shortenUrl(req, res){
             }
         }
 
-        // Save to database
+        // Save to database (with user ID if authenticated)
         const shortened = await prisma.shortenedUrl.create({
             data: {
                 shortCode,
                 originalUrl,
-                expiresAt
+                expiresAt,
+                userId: req.user ? req.user.userId : null
             }
         });
 
@@ -188,6 +189,9 @@ async function getAnalytics(req, res){
 async function getAllUrls(req, res) {
     try{
         const urls = await prisma.shortenedUrl.findMany({
+            where: {
+                userId: req.user.userId
+            },
             orderBy: {
                 createdAt: "desc"
             }
@@ -207,13 +211,19 @@ async function getAllUrls(req, res) {
 async function deleteUrl(req, res){
     try{
         const { shortCode } = req.params;
-
+        
+        // Check if URL exists and belongs to user
         const url = await prisma.shortenedUrl.findUnique({
             where: { shortCode }
         });
 
         if (!url){
             return res.status(404).json({ error: "Short URL not found."})
+        }
+
+        // Check ownership
+        if (url.userID !== req.user.userId){
+            return res.status(403).json({ error: 'You do not have permission to delete this URL.' });
         }
 
         // Delete the URl from database
